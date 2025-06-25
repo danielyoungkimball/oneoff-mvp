@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { Product, CreateProductInput } from '../types/product';
+import ShareProduct from './ShareProduct';
 
 export default function ProductManager() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [sharingProduct, setSharingProduct] = useState<Product | null>(null);
   const [newProduct, setNewProduct] = useState<CreateProductInput>({
     name: '',
     brand: '',
@@ -229,18 +231,38 @@ export default function ProductManager() {
                     </div>
                   )}
                 </div>
-                <button
-                  onClick={() => deleteProduct(product.id)}
-                  disabled={loading}
-                  className="ml-4 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
-                >
-                  Delete
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setSharingProduct(product)}
+                    disabled={loading}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50"
+                  >
+                    Share
+                  </button>
+                  <button
+                    onClick={() => deleteProduct(product.id)}
+                    disabled={loading}
+                    className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 disabled:opacity-50"
+                  >
+                    Delete
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         )}
       </div>
+
+      {/* Share Product Modal */}
+      {sharingProduct && (
+        <ShareProduct
+          product={sharingProduct}
+          onClose={() => setSharingProduct(null)}
+          onSuccess={() => {
+            // Optionally refresh products or show success message
+          }}
+        />
+      )}
     </div>
   );
 } 

@@ -1,6 +1,6 @@
 # OneOff MVP - Complete Setup Guide
 
-This project includes a complete authentication system and product management with vector search using Supabase and OpenAI embeddings.
+This project includes a complete authentication system, user management, product management with vector search, and friend recommendations using Supabase and OpenAI embeddings.
 
 ## 🚀 Quick Start
 
@@ -19,14 +19,61 @@ OPENAI_API_KEY=your_openai_api_key
 
 ### 2. Database Setup
 
-Run these SQL commands in your Supabase SQL editor:
+Run these SQL commands in your Supabase SQL editor in order:
 
 #### Step 1: Enable pgvector extension
 ```sql
 CREATE EXTENSION IF NOT EXISTS vector;
 ```
 
-#### Step 2: Create products table
+#### Step 2: Create users table
+```sql
+CREATE TABLE users (
+  id UUID PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT,
+  avatar_url TEXT,
+  preferences TEXT[] DEFAULT '{}',
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_users_email ON users(email);
+CREATE INDEX idx_users_preferences ON users USING GIN(preferences);
+
+-- Create trigger for updated_at
+CREATE TRIGGER update_users_updated_at 
+    BEFORE UPDATE ON users 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Auto-create user records from auth
+CREATE OR REPLACE FUNCTION handle_new_user()
+RETURNS TRIGGER AS $$
+BEGIN
+  INSERT INTO users (id, email, name, avatar_url)
+  VALUES (
+    NEW.id,
+    NEW.email,
+    COALESCE(NEW.raw_user_meta_data->>'name', NEW.email),
+    NEW.raw_user_meta_data->>'avatar_url'
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    name = EXCLUDED.name,
+    avatar_url = EXCLUDED.avatar_url,
+    updated_at = NOW();
+  
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT OR UPDATE ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION handle_new_user();
+```
+
+#### Step 3: Create products table
 ```sql
 CREATE TABLE products (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -40,14 +87,16 @@ CREATE TABLE products (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
-```
 
-#### Step 3: Create indexes
-```sql
 CREATE INDEX idx_products_brand ON products(brand);
 CREATE INDEX idx_products_price ON products(price);
 CREATE INDEX idx_products_tags ON products USING GIN(tags);
 CREATE INDEX idx_products_embedding ON products USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
+
+CREATE TRIGGER update_products_updated_at 
+    BEFORE UPDATE ON products 
+    FOR EACH ROW 
+    EXECUTE FUNCTION update_updated_at_column();
 ```
 
 #### Step 4: Create vector search function
@@ -89,6 +138,32 @@ END;
 $$;
 ```
 
+#### Step 5: Create friend recommendations table
+```sql
+CREATE TABLE friend_recs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id UUID NOT NULL,
+  receiver_id UUID NOT NULL,
+  product_id UUID NOT NULL,
+  message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  -- Foreign key constraints
+  CONSTRAINT fk_friend_recs_sender FOREIGN KEY (sender_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_friend_recs_receiver FOREIGN KEY (receiver_id) REFERENCES users(id) ON DELETE CASCADE,
+  CONSTRAINT fk_friend_recs_product FOREIGN KEY (product_id) REFERENCES products(id) ON DELETE CASCADE
+);
+
+-- Create indexes for better performance
+CREATE INDEX idx_friend_recs_sender ON friend_recs(sender_id);
+CREATE INDEX idx_friend_recs_receiver ON friend_recs(receiver_id);
+CREATE INDEX idx_friend_recs_product ON friend_recs(product_id);
+CREATE INDEX idx_friend_recs_created_at ON friend_recs(created_at);
+
+-- Create a composite index for common queries
+CREATE INDEX idx_friend_recs_receiver_created ON friend_recs(receiver_id, created_at DESC);
+```
+
 ### 3. Authentication Setup
 
 #### Google OAuth (Optional)
@@ -106,13 +181,15 @@ npm run dev
 
 Visit `http://localhost:3000`
 
-## 🛍️ Features
+## 👥 Features
 
-### Authentication
+### Authentication & User Management
 - ✅ **Google OAuth** - One-click sign-in with Google
 - ✅ **Email/Password** - Traditional authentication
+- ✅ **User Profiles** - Customizable user information
+- ✅ **User Preferences** - Theme, notifications, favorite brands
 - ✅ **Session Management** - Automatic session persistence
-- ✅ **Protected Routes** - Secure access to product management
+- ✅ **Protected Routes** - Secure access to all features
 
 ### Product Management
 - ✅ **CRUD Operations** - Create, read, update, delete products
@@ -120,6 +197,7 @@ Visit `http://localhost:3000`
 - ✅ **Filtering** - Search by brand, price, tags
 - ✅ **Real-time Updates** - Instant UI updates
 - ✅ **Responsive Design** - Works on all devices
+- ✅ **Product Sharing** - Share products with friends
 
 ### Vector Search
 - ✅ **Semantic Search** - Find products by meaning, not just keywords
@@ -127,35 +205,78 @@ Visit `http://localhost:3000`
 - ✅ **Cosine Similarity** - Accurate similarity matching
 - ✅ **Configurable Threshold** - Adjust search sensitivity
 
+### Personalized Feed
+- ✅ **AI-Powered Recommendations** - Uses vector similarity to match user preferences
+- ✅ **User Preference Integration** - Considers favorite brands, price range, search history
+- ✅ **Dynamic Query Building** - Constructs semantic queries from user data
+- ✅ **Fallback Mechanisms** - Provides filtered results when vector search is insufficient
+- ✅ **Real-time Updates** - Feed refreshes based on preference changes
+
+### Friend Recommendations
+- ✅ **Product Sharing** - Share products with friends via email
+- ✅ **Personal Messages** - Add custom messages when sharing
+- ✅ **User Search** - Find users by name or email
+- ✅ **Recommendation History** - View sent and received recommendations
+- ✅ **Social Features** - Track sharing activity and recommendations
+
 ## 📁 Project Structure
 
 ```
 src/
 ├── app/
 │   ├── api/
-│   │   └── products/
-│   │       ├── route.ts              # Product CRUD API
-│   │       └── [id]/route.ts         # Individual product API
-│   │   ├── auth/callback/route.ts        # OAuth callback handler
-│   │   ├── layout.tsx                    # Root layout with AuthProvider
-│   │   └── page.tsx                      # Main page with conditional rendering
-│   ├── components/
-│   │   ├── SignIn.tsx                    # Authentication form
-│   │   ├── Dashboard.tsx                 # User dashboard
-│   │   └── ProductManager.tsx            # Product management interface
-│   ├── contexts/
-│   │   └── AuthContext.tsx               # Authentication context
-│   ├── services/
-│   │   └── productService.ts             # Product business logic
-│   ├── types/
-│   │   └── product.ts                    # TypeScript types
-│   └── utils/
-│       └── embeddings.ts                 # OpenAI embedding utilities
+│   │   ├── products/
+│   │   │   ├── route.ts              # Product CRUD API
+│   │   │   └── [id]/route.ts         # Individual product API
+│   │   ├── users/
+│   │   │   ├── search/route.ts       # User search API
+│   │   │   └── me/
+│   │   │       ├── route.ts           # Current user API
+│   │   │       └── preferences/route.ts # User preferences API
+│   │   ├── friend-recs/
+│   │   │   ├── route.ts              # Friend recommendations API
+│   │   │   └── [id]/route.ts         # Individual recommendation API
+│   │   └── feed/route.ts             # Personalized feed API
+│   ├── auth/callback/route.ts        # OAuth callback handler
+│   ├── layout.tsx                    # Root layout with AuthProvider
+│   └── page.tsx                      # Main page with tabs
+├── components/
+│   ├── SignIn.tsx                    # Authentication form
+│   ├── ProductManager.tsx            # Product management interface
+│   ├── UserProfile.tsx               # User profile management
+│   ├── Feed.tsx                      # Personalized product feed
+│   ├── ShareProduct.tsx              # Product sharing modal
+│   └── FriendRecommendations.tsx     # Friend recommendations interface
+├── contexts/
+│   └── AuthContext.tsx               # Authentication context
+├── services/
+│   ├── productService.ts             # Product business logic
+│   ├── userService.ts                # User business logic
+│   └── friendRecsService.ts          # Friend recommendations logic
+├── types/
+│   ├── product.ts                    # Product TypeScript types
+│   ├── friendRecs.ts                 # Friend recommendations types
+│   └── db.ts                         # Database TypeScript types
+├── utils/
+│   └── embeddings.ts                 # OpenAI embedding utilities
 └── lib/
     └── supabase.ts                   # Supabase client
 ```
 
 ## 🔍 API Endpoints
+
+### Authentication
+- `POST /api/auth/callback` - OAuth callback handler
+
+### Users
+- `GET /api/users/me` - Get current user profile
+- `PUT /api/users/me` - Update current user profile
+- `GET /api/users/me/preferences` - Get user preferences
+- `PUT /api/users/me/preferences` - Update user preferences
+- `GET /api/users/search?q=query` - Search users for sharing
+
+### Feed
+- `GET /api/feed` - Get personalized product recommendations
 
 ### Products
 - `GET /api/products` - Get all products with filters
@@ -164,6 +285,12 @@ src/
 - `GET /api/products/[id]` - Get specific product
 - `PUT /api/products/[id]` - Update product
 - `DELETE /api/products/[id]` - Delete product
+
+### Friend Recommendations
+- `GET /api/friend-recs?type=sent|received` - Get sent or received recommendations
+- `POST /api/friend-recs` - Create new recommendation
+- `GET /api/friend-recs/[id]` - Get specific recommendation
+- `DELETE /api/friend-recs/[id]` - Delete recommendation
 
 ### Search Examples
 ```bash
@@ -178,7 +305,55 @@ GET /api/products?min_price=100&max_price=500
 
 # Filter by tags
 GET /api/products?tags=smartphone,camera
+
+# Search users for sharing
+GET /api/users/search?q=john
+
+# Get received recommendations
+GET /api/friend-recs?type=received
+
+# Get sent recommendations
+GET /api/friend-recs?type=sent
 ```
+
+## 👥 Friend Recommendations System
+
+### How it Works
+1. **Product Discovery** - Users browse and search products
+2. **Sharing** - Click "Share" button on any product
+3. **User Selection** - Search and select friends to share with
+4. **Personal Message** - Add optional custom message
+5. **Notification** - Friends receive recommendations in their feed
+
+### Database Schema
+```sql
+CREATE TABLE friend_recs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  sender_id UUID NOT NULL,
+  receiver_id UUID NOT NULL,
+  product_id UUID NOT NULL,
+  message TEXT,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  
+  CONSTRAINT fk_friend_recs_sender FOREIGN KEY (sender_id) REFERENCES users(id),
+  CONSTRAINT fk_friend_recs_receiver FOREIGN KEY (receiver_id) REFERENCES users(id),
+  CONSTRAINT fk_friend_recs_product FOREIGN KEY (product_id) REFERENCES products(id)
+);
+```
+
+### Features
+- **User Search** - Find friends by name or email
+- **Bulk Sharing** - Share with multiple friends at once
+- **Personal Messages** - Add context to recommendations
+- **Recommendation History** - Track sent and received recommendations
+- **Delete Recommendations** - Remove sent recommendations
+- **Real-time Updates** - Instant UI updates when sharing
+
+### Security
+- Users can only view recommendations they sent or received
+- Only senders can delete their recommendations
+- User search excludes current user
+- All operations require authentication
 
 ## 🧠 Vector Search Details
 
@@ -200,6 +375,35 @@ GET /api/products?tags=smartphone,camera
 - **Threshold**: Configurable (default: 0.7)
 - **Results**: Configurable limit (default: 10)
 
+## 👤 User Model
+
+### Database Schema
+```sql
+CREATE TABLE users (
+  id UUID PRIMARY KEY,
+  email TEXT UNIQUE NOT NULL,
+  name TEXT,
+  avatar_url TEXT,
+  preferences TEXT[],
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+```
+
+### User Preferences
+- **Theme**: Light/Dark mode preference
+- **Notifications**: Email notification settings
+- **Favorite Brands**: User's preferred brands
+- **Price Range**: Min/max price preferences
+- **Search History**: Recent search queries
+
+### Auto-User Creation
+When a user signs up through Supabase Auth, a corresponding record is automatically created in the `users` table with:
+- User ID from auth
+- Email address
+- Name (from OAuth or email)
+- Avatar URL (from OAuth)
+
 ## 🔧 Development
 
 ### Adding New Products
@@ -208,15 +412,24 @@ GET /api/products?tags=smartphone,camera
 3. Product is stored with vector data
 4. Immediately available for semantic search
 
-### Customizing Search
-- Adjust similarity threshold in API calls
-- Modify embedding generation logic in `embeddings.ts`
-- Add new filters in `productService.ts`
+### Sharing Products
+1. Click "Share" button on any product
+2. Search for users by name or email
+3. Select friends to share with
+4. Add optional personal message
+5. Send recommendation
+
+### Customizing User Preferences
+- Add new preference fields in `types/db.ts`
+- Update the UserProfile component
+- Modify the preferences API endpoints
 
 ### Database Migrations
 Use the SQL files in `supabase/migrations/` to set up your database:
-- `001_create_products_table.sql` - Basic table setup
+- `001_create_products_table.sql` - Products table setup
 - `002_create_vector_search_function.sql` - Vector search functions
+- `003_create_users_table.sql` - Users table setup
+- `004_create_friend_recs_table.sql` - Friend recommendations table
 
 ## 🚀 Deployment
 
@@ -243,6 +456,8 @@ OPENAI_API_KEY=your_openai_key
 - Vector search uses server-side embedding generation
 - All database operations are validated and sanitized
 - Authentication state is managed through secure cookies
+- User data is automatically synced between auth and users table
+- Friend recommendations are properly secured with user authorization
 
 ## 📊 Monitoring
 
@@ -250,6 +465,8 @@ OPENAI_API_KEY=your_openai_key
 - Monitor database performance
 - View authentication logs
 - Check API usage
+- Track user registrations
+- Monitor friend recommendation activity
 
 ### OpenAI Dashboard
 - Monitor embedding API usage
@@ -261,4 +478,8 @@ OPENAI_API_KEY=your_openai_key
 2. **Advanced Search** - Add faceted search and filters
 3. **Product Images** - Implement image upload and storage
 4. **User Preferences** - Save user search history and preferences
-5. **Analytics** - Track search patterns and popular products 
+5. **Analytics** - Track search patterns and popular products
+6. **Admin Panel** - User management and analytics dashboard
+7. **Friends System** - Add friend connections and social graph
+8. **Notifications** - Email notifications for recommendations
+9. **Recommendation Analytics** - Track sharing patterns and engagement 
