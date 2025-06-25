@@ -8,10 +8,10 @@ import { UserService } from '../services/userService';
 
 interface AuthContextType {
   user: AuthUser | null;
-  signIn: (email: string, password: string) => Promise<void>;
-  signInWithGoogle: () => Promise<void>;
-  signUp: (email: string, password: string) => Promise<void>;
-  updateProfile: (profile: User) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ error: Error | null }>;
+  signInWithGoogle: () => Promise<{ error: Error | null }>;
+  signUp: (email: string, password: string) => Promise<{ error: Error | null }>;
+  updateProfile: (profile: Partial<User>) => Promise<{ error: Error | null }>;
   profile: User | null;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -24,13 +24,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
-  const [signIn, setSignIn] = useState<() => Promise<void>>(() => Promise.resolve());
-  const [signInWithGoogle, setSignInWithGoogle] = useState<() => Promise<void>>(() => Promise.resolve());
-  const [signUp, setSignUp] = useState<() => Promise<void>>(() => Promise.resolve());
-  const [updateProfile, setUpdateProfile] = useState<() => Promise<void>>(() => Promise.resolve());
 
-  // TODO: Implement these functions
-  console.log(setSignIn, setSignInWithGoogle, setSignUp, setUpdateProfile);
   const fetchProfile = async (userId: string) => {
     try {
       const userProfile = await UserService.getUser(userId);
@@ -44,6 +38,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = async () => {
     if (user) {
       await fetchProfile(user.id);
+    }
+  };
+
+  const signIn = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    return { error };
+  };
+
+  const signInWithGoogle = async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    return { error };
+  };
+
+  const signUp = async (email: string, password: string) => {
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: `${window.location.origin}/auth/callback`,
+      },
+    });
+    return { error };
+  };
+
+  const updateProfile = async (profileData: Partial<User>) => {
+    if (!user) return { error: new Error('No user logged in') };
+    
+    try {
+      const updatedProfile = await UserService.updateUser(user.id, profileData);
+      setProfile(updatedProfile);
+      return { error: null };
+    } catch (error) {
+      return { error };
     }
   };
 

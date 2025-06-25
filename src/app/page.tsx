@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { useAuth } from '../contexts/AuthContext';
-import SignIn from '../components/SignIn';
 import ProductManager from '../components/ProductManager';
 import UserProfile from '../components/UserProfile';
 import Feed from '../components/Feed';
@@ -10,7 +10,14 @@ import FriendRecommendations from '../components/FriendRecommendations';
 
 export default function Home() {
   const { user, profile, loading, signOut } = useAuth();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<'feed' | 'products' | 'recommendations' | 'profile'>('feed');
+
+  useEffect(() => {
+    if (!loading && !user) {
+      router.push('/signin');
+    }
+  }, [user, loading, router]);
 
   if (loading) {
     return (
@@ -24,7 +31,7 @@ export default function Home() {
   }
 
   if (!user) {
-    return <SignIn />;
+    return null; // Will redirect to signin
   }
 
   return (

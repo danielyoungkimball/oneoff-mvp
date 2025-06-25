@@ -1,21 +1,33 @@
 'use client';
 
 import { useState } from 'react';
-import { useAuth } from '../contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '../../contexts/AuthContext';
+import Link from 'next/link';
 
-export default function SignIn() {
-  const { signIn } = useAuth();
+export default function SignInPage() {
+  const { signIn, signInWithGoogle } = useAuth();
+  const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
   const handleEmailSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError('');
+    
     try {
-      await signIn(email, password);
-    } catch {
-      // Error handling is done in AuthContext
+      const { error } = await signIn(email, password);
+      if (error) {
+        setError(error.message);
+      } else {
+        router.push('/');
+      }
+    } catch (err) {
+      console.log(err);
+      setError('An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -23,11 +35,16 @@ export default function SignIn() {
 
   const handleGoogleSignIn = async () => {
     setLoading(true);
+    setError('');
+    
     try {
-      // TODO: Implement Google sign in
-      await signIn('google', 'password');
-    } catch {
-      // Error handling is done in AuthContext
+      const { error } = await signInWithGoogle();
+      if (error) {
+        setError(error.message);
+      }
+    } catch (err) {
+      console.log(err);
+      setError('An unexpected error occurred');
     } finally {
       setLoading(false);
     }
@@ -40,7 +57,20 @@ export default function SignIn() {
           <h2 className="mt-6 text-center text-3xl font-extrabold text-gray-900">
             Sign in to your account
           </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Or{' '}
+            <Link href="/signup" className="font-medium text-indigo-600 hover:text-indigo-500">
+              create a new account
+            </Link>
+          </p>
         </div>
+        
+        {error && (
+          <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+            {error}
+          </div>
+        )}
+        
         <form className="mt-8 space-y-6" onSubmit={handleEmailSignIn}>
           <div className="rounded-md shadow-sm -space-y-px">
             <div>
