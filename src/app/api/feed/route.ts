@@ -22,7 +22,7 @@ export async function GET() {
       .single();
 
     // Get friend recommendations first
-    const { data: friendRecs } = await supabase
+    const { data: friendRecsRaw, error: friendRecsError } = await supabase
       .from('friend_recs')
       .select(`
         *,
@@ -32,6 +32,8 @@ export async function GET() {
       .eq('receiver_id', authUser.id)
       .order('created_at', { ascending: false })
       .limit(10);
+    const friendRecs = friendRecsRaw || [];
+    if (friendRecsError) console.error('Friend recs error:', friendRecsError);
 
     // Build semantic query from user preferences
     let semanticQuery = '';
@@ -45,25 +47,43 @@ export async function GET() {
     }
 
     // Generate embedding for semantic search
-    const embedding = await EmbeddingService.generateEmbedding(semanticQuery);
+    let embedding = null;
+    try {
+      embedding = await EmbeddingService.generateEmbedding(semanticQuery);
+    } catch (e) {
+      console.error('Embedding error:', e);
+    }
     
     // Perform vector search
-    const { data: vectorResults } = await supabase.rpc('match_products', {
-      query_embedding: embedding,
-      match_threshold: 0.7,
-      match_count: 20
-    });
+    let vectorResults = [];
+    if (embedding) {
+      try {
+        const { data: vr, error: vrError } = await supabase.rpc('match_products', {
+          query_embedding: embedding,
+          match_threshold: 0.7,
+          match_count: 20
+        });
+        if (vrError) console.error('Vector search error:', vrError);
+        vectorResults = vr || [];
+      } catch (e) {
+        console.error('Vector search exception:', e);
+      }
+    }
 
     // Get additional products if vector search didn't return enough
     let additionalProducts = [];
     if (!vectorResults || vectorResults.length < 10) {
-      const { data: fallbackProducts } = await supabase
-        .from('products')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      additionalProducts = fallbackProducts || [];
+      try {
+        const { data: fallbackProducts, error: fallbackError } = await supabase
+          .from('products')
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(20);
+        if (fallbackError) console.error('Fallback products error:', fallbackError);
+        additionalProducts = fallbackProducts || [];
+      } catch (e) {
+        console.error('Fallback products exception:', e);
+      }
     }
 
     // Combine and deduplicate results
@@ -74,30 +94,33 @@ export async function GET() {
 
     // Remove duplicates based on product ID
     const uniqueProducts = allProducts.filter((product, index, self) => 
-      index === self.findIndex(p => p.id === product.id)
+      product && product.id && index === self.findIndex(p => p && p.id === product.id)
     );
 
-    // Update user's search history
-    if (semanticQuery) {
-      const currentHistory = userProfile?.search_history || [];
+    // Update user's search history only if userProfile exists
+    if (userProfile && semanticQuery) {
+      const currentHistory = userProfile.search_history || [];
       const newHistory = [semanticQuery, ...currentHistory.slice(0, 9)]; // Keep last 10 searches
-      
-      await supabase
-        .from('users')
-        .update({ search_history: newHistory })
-        .eq('id', authUser.id);
+      try {
+        await supabase
+          .from('users')
+          .update({ search_history: newHistory })
+          .eq('id', authUser.id);
+      } catch (e) {
+        console.error('Search history update error:', e);
+      }
     }
 
     return NextResponse.json({
       products: uniqueProducts.slice(0, 20),
-      recommendations: friendRecs || [],
+      recommendations: friendRecs,
       query: semanticQuery
     });
 
-  } catch (error: unknown) {
+  } catch (error) {
     console.error('Error generating feed:', error);
     return NextResponse.json(
-      { error: 'Failed to generate feed' },
+      { products: [], recommendations: [], query: '', error: 'Failed to generate feed' },
       { status: 500 }
     );
   }
