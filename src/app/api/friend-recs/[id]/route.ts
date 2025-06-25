@@ -2,11 +2,21 @@ import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '../../../../../lib/supabase';
 import { FriendRecsService } from '../../../../services/friendRecsService';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } },
-) {
+function getIdFromRequest(request: NextRequest): string | null {
+  // /api/friend-recs/[id] => get last segment
+  const segments = request.nextUrl.pathname.split('/');
+  return segments[segments.length - 1] || null;
+}
+
+export async function GET(request: NextRequest) {
   try {
+    const id = getIdFromRequest(request);
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Missing recommendation id' },
+        { status: 400 }
+      );
+    }
     // Get current authenticated user
     const { data: { user: authUser } } = await supabase.auth.getUser();
     
@@ -17,7 +27,7 @@ export async function GET(
       );
     }
 
-    const recommendation = await FriendRecsService.getRecommendation(params.id);
+    const recommendation = await FriendRecsService.getRecommendation(id);
     
     if (!recommendation) {
       return NextResponse.json(
@@ -44,11 +54,15 @@ export async function GET(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest) {
   try {
+    const id = getIdFromRequest(request);
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Missing recommendation id' },
+        { status: 400 }
+      );
+    }
     // Get current authenticated user
     const { data: { user: authUser } } = await supabase.auth.getUser();
     
@@ -59,7 +73,7 @@ export async function DELETE(
       );
     }
 
-    await FriendRecsService.deleteRecommendation(params.id, authUser.id);
+    await FriendRecsService.deleteRecommendation(id, authUser.id);
     
     return NextResponse.json({ message: 'Recommendation deleted successfully' });
   } catch (error) {
