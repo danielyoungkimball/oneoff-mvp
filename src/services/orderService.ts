@@ -1,6 +1,5 @@
 import { supabase } from '../../lib/supabase';
-import { Order, CreateOrderInput, OrderWithDetails, BotTriggerPayload } from '../types/order';
-import { Product } from '../types/product';
+import { Order, CreateOrderInput, OrderWithDetails } from '../types/order';
 
 export class OrderService {
   // Create a new order
@@ -86,7 +85,7 @@ export class OrderService {
 
   // Update bot status
   static async updateBotStatus(orderId: string, botStatus: Order['bot_status'], logs?: string[]): Promise<void> {
-    const updateData: any = { bot_status: botStatus };
+    const updateData: Record<string, unknown> = { bot_status: botStatus };
     if (logs) {
       updateData.bot_logs = logs;
     }

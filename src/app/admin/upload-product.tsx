@@ -1,7 +1,6 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function UploadProduct() {
   const [form, setForm] = useState({
@@ -15,7 +14,6 @@ export default function UploadProduct() {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState("");
   const [error, setError] = useState("");
-  const router = useRouter();
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
@@ -42,8 +40,9 @@ export default function UploadProduct() {
       if (!res.ok) throw new Error("Failed to upload product");
       setSuccess("Product uploaded!");
       setForm({ name: "", brand: "", price: "", tags: "", img_url: "", source_url: "" });
-    } catch (err: any) {
-      setError(err.message || "Error uploading product");
+    } catch (err: unknown) {
+      const errorMessage = err instanceof Error ? err.message : "Error uploading product";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }

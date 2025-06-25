@@ -1,23 +1,25 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { ProductService } from '../../../../services/productService';
-import { EmbeddingService } from '../../../../utils/embeddings';
-import { UpdateProductInput } from '../../../../types/product';
+import { supabase } from '../../../../../lib/supabase';
 
 export async function GET(
   request: NextRequest,
   { params }: { params: { id: string } }
 ) {
   try {
-    const product = await ProductService.getProduct(params.id);
-    
-    if (!product) {
+    const { data, error } = await supabase
+      .from('products')
+      .select('*')
+      .eq('id', params.id)
+      .single();
+
+    if (error) {
       return NextResponse.json(
         { error: 'Product not found' },
         { status: 404 }
       );
     }
 
-    return NextResponse.json(product);
+    return NextResponse.json(data);
   } catch (error) {
     console.error('Error fetching product:', error);
     return NextResponse.json(
@@ -32,29 +34,23 @@ export async function PUT(
   { params }: { params: { id: string } }
 ) {
   try {
-    const body: UpdateProductInput = await request.json();
+    const body = await request.json();
     
-    // Generate new embedding if product data changed
-    let embedding = body.embedding;
-    if (body.name || body.brand || body.tags) {
-      const currentProduct = await ProductService.getProduct(params.id);
-      if (currentProduct) {
-        embedding = await EmbeddingService.generateProductEmbedding({
-          name: body.name || currentProduct.name,
-          brand: body.brand || currentProduct.brand,
-          tags: body.tags || currentProduct.tags,
-        });
-      }
+    const { data, error } = await supabase
+      .from('products')
+      .update(body)
+      .eq('id', params.id)
+      .select()
+      .single();
+
+    if (error) {
+      return NextResponse.json(
+        { error: 'Failed to update product' },
+        { status: 400 }
+      );
     }
 
-    const { id, ...updateData } = body;
-    const product = await ProductService.updateProduct({
-      id: params.id,
-      ...updateData,
-      embedding,
-    });
-
-    return NextResponse.json(product);
+    return NextResponse.json(data);
   } catch (error) {
     console.error('Error updating product:', error);
     return NextResponse.json(
@@ -69,7 +65,18 @@ export async function DELETE(
   { params }: { params: { id: string } }
 ) {
   try {
-    await ProductService.deleteProduct(params.id);
+    const { error } = await supabase
+      .from('products')
+      .delete()
+      .eq('id', params.id);
+
+    if (error) {
+      return NextResponse.json(
+        { error: 'Failed to delete product' },
+        { status: 400 }
+      );
+    }
+
     return NextResponse.json({ message: 'Product deleted successfully' });
   } catch (error) {
     console.error('Error deleting product:', error);

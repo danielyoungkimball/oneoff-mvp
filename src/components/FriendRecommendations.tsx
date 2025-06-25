@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { FriendRecWithDetails, FriendRecsResponse } from '../types/friendRecs';
+import { useState, useEffect, useCallback } from 'react';
+import Image from 'next/image';
+import { FriendRecsResponse } from '../types/friendRecs';
 
 export default function FriendRecommendations() {
   const [recommendations, setRecommendations] = useState<FriendRecsResponse | null>(null);
@@ -9,11 +10,7 @@ export default function FriendRecommendations() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    fetchRecommendations();
-  }, [activeTab]);
-
-  const fetchRecommendations = async () => {
+  const fetchRecommendations = useCallback(async () => {
     setLoading(true);
     setError(null);
 
@@ -31,7 +28,11 @@ export default function FriendRecommendations() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [activeTab]);
+
+  useEffect(() => {
+    fetchRecommendations();
+  }, [fetchRecommendations]);
 
   const deleteRecommendation = async (id: string) => {
     try {
@@ -142,11 +143,14 @@ export default function FriendRecommendations() {
                       {activeTab === 'received' ? (
                         <>
                           {rec.sender.avatar_url ? (
-                            <img
-                              src={rec.sender.avatar_url}
-                              alt={rec.sender.name}
-                              className="w-10 h-10 rounded-full mr-3"
-                            />
+                            <div className="relative w-10 h-10 mr-3">
+                              <Image
+                                src={rec.sender.avatar_url}
+                                alt={rec.sender.name}
+                                fill
+                                className="rounded-full"
+                              />
+                            </div>
                           ) : (
                             <div className="w-10 h-10 bg-gray-300 rounded-full mr-3 flex items-center justify-center">
                               <span className="text-sm text-gray-600">
@@ -166,11 +170,14 @@ export default function FriendRecommendations() {
                       ) : (
                         <>
                           {rec.receiver.avatar_url ? (
-                            <img
-                              src={rec.receiver.avatar_url}
-                              alt={rec.receiver.name}
-                              className="w-10 h-10 rounded-full mr-3"
-                            />
+                            <div className="relative w-10 h-10 mr-3">
+                              <Image
+                                src={rec.receiver.avatar_url}
+                                alt={rec.receiver.name}
+                                fill
+                                className="rounded-full"
+                              />
+                            </div>
                           ) : (
                             <div className="w-10 h-10 bg-gray-300 rounded-full mr-3 flex items-center justify-center">
                               <span className="text-sm text-gray-600">
@@ -193,22 +200,25 @@ export default function FriendRecommendations() {
                     {/* Message */}
                     {rec.message && (
                       <div className="mb-4 p-3 bg-gray-50 rounded-lg">
-                        <p className="text-gray-700 italic">"{rec.message}"</p>
+                        <p className="text-gray-700 italic">&ldquo;{rec.message}&rdquo;</p>
                       </div>
                     )}
 
                     {/* Product Info */}
                     <div className="flex items-center space-x-4">
                       {rec.product.img_url && (
-                        <img
-                          src={rec.product.img_url}
-                          alt={rec.product.name}
-                          className="w-16 h-16 object-cover rounded-lg"
-                          onError={(e) => {
-                            const target = e.target as HTMLImageElement;
-                            target.style.display = 'none';
-                          }}
-                        />
+                        <div className="relative w-16 h-16">
+                          <Image
+                            src={rec.product.img_url}
+                            alt={rec.product.name}
+                            fill
+                            className="object-cover rounded-lg"
+                            onError={(e) => {
+                              const target = e.target as HTMLImageElement;
+                              target.style.display = 'none';
+                            }}
+                          />
+                        </div>
                       )}
                       <div className="flex-1">
                         <h3 className="font-semibold text-lg">{rec.product.name}</h3>

@@ -1,11 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { supabase } from '../../../../lib/supabase';
-import { UserService } from '../../../services/userService';
-import { ProductService } from '../../../services/productService';
 import { EmbeddingService } from '../../../utils/embeddings';
-import { UserPreferences } from '../../../types/db';
 
-export async function GET(req: NextRequest) {
+export async function GET() {
   try {
     // Get current authenticated user
     const { data: { user: authUser } } = await supabase.auth.getUser();
@@ -17,129 +14,91 @@ export async function GET(req: NextRequest) {
       );
     }
 
-    // Get user preferences
-    const userPrefs = await UserService.getUserPreferences(authUser.id);
+    // Get user profile and preferences
+    const { data: userProfile } = await supabase
+      .from('users')
+      .select('preferences, search_history')
+      .eq('id', authUser.id)
+      .single();
+
+    // Get friend recommendations first
+    const { data: friendRecs } = await supabase
+      .from('friend_recs')
+      .select(`
+        *,
+        sender:users!friend_recs_sender_id_fkey(id, name, email, avatar_url),
+        product:products!friend_recs_product_id_fkey(id, name, brand, price, img_url, source_url, tags)
+      `)
+      .eq('receiver_id', authUser.id)
+      .order('created_at', { ascending: false })
+      .limit(10);
+
+    // Build semantic query from user preferences
+    let semanticQuery = '';
+    const preferences = userProfile?.preferences || [];
     
-    // Get personalized product recommendations
-    const similarProducts = await matchProductsToUser(userPrefs);
+    if (preferences.length > 0) {
+      semanticQuery = preferences.join(' ');
+    } else {
+      // Fallback to generic query
+      semanticQuery = 'popular products trending items';
+    }
+
+    // Generate embedding for semantic search
+    const embedding = await EmbeddingService.generateEmbedding(semanticQuery);
     
-    return NextResponse.json({
-      products: similarProducts,
-      userPreferences: userPrefs,
-      total: similarProducts.length
+    // Perform vector search
+    const { data: vectorResults } = await supabase.rpc('match_products', {
+      query_embedding: embedding,
+      match_threshold: 0.7,
+      match_count: 20
     });
-  } catch (error) {
+
+    // Get additional products if vector search didn't return enough
+    let additionalProducts = [];
+    if (!vectorResults || vectorResults.length < 10) {
+      const { data: fallbackProducts } = await supabase
+        .from('products')
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      additionalProducts = fallbackProducts || [];
+    }
+
+    // Combine and deduplicate results
+    const allProducts = [
+      ...(vectorResults || []),
+      ...additionalProducts
+    ];
+
+    // Remove duplicates based on product ID
+    const uniqueProducts = allProducts.filter((product, index, self) => 
+      index === self.findIndex(p => p.id === product.id)
+    );
+
+    // Update user's search history
+    if (semanticQuery) {
+      const currentHistory = userProfile?.search_history || [];
+      const newHistory = [semanticQuery, ...currentHistory.slice(0, 9)]; // Keep last 10 searches
+      
+      await supabase
+        .from('users')
+        .update({ search_history: newHistory })
+        .eq('id', authUser.id);
+    }
+
+    return NextResponse.json({
+      products: uniqueProducts.slice(0, 20),
+      recommendations: friendRecs || [],
+      query: semanticQuery
+    });
+
+  } catch (error: unknown) {
     console.error('Error generating feed:', error);
     return NextResponse.json(
       { error: 'Failed to generate feed' },
       { status: 500 }
     );
   }
-}
-
-async function matchProductsToUser(userPrefs: UserPreferences) {
-  try {
-    // Build a query based on user preferences
-    const queryText = buildQueryFromPreferences(userPrefs);
-    
-    if (!queryText.trim()) {
-      // If no specific preferences, return recent products
-      return await ProductService.getProducts(20, 0);
-    }
-
-    // Generate embedding for the user's preference query
-    const embedding = await EmbeddingService.generateEmbedding(queryText);
-    
-    // Search for similar products using vector similarity
-    const similarProducts = await ProductService.searchProductsByText(
-      queryText,
-      embedding,
-      20, // limit
-      0.6  // lower threshold for broader recommendations
-    );
-
-    // If we don't have enough vector results, supplement with filtered results
-    if (similarProducts.length < 10) {
-      const filteredProducts = await getFilteredProducts(userPrefs);
-      const combinedProducts = [...similarProducts, ...filteredProducts];
-      
-      // Remove duplicates and return unique products
-      const uniqueProducts = combinedProducts.filter((product, index, self) => 
-        index === self.findIndex(p => p.id === product.id)
-      );
-      
-      return uniqueProducts.slice(0, 20);
-    }
-
-    return similarProducts;
-  } catch (error) {
-    console.error('Error matching products to user:', error);
-    // Fallback to recent products
-    return await ProductService.getProducts(20, 0);
-  }
-}
-
-function buildQueryFromPreferences(userPrefs: UserPreferences): string {
-  const queryParts: string[] = [];
-
-  // Add favorite brands
-  if (userPrefs.favorite_brands && userPrefs.favorite_brands.length > 0) {
-    queryParts.push(userPrefs.favorite_brands.join(' '));
-  }
-
-  // Add price range context
-  if (userPrefs.price_range) {
-    const { min, max } = userPrefs.price_range;
-    if (min && max) {
-      if (max < 100) {
-        queryParts.push('budget affordable');
-      } else if (max < 500) {
-        queryParts.push('mid-range quality');
-      } else {
-        queryParts.push('premium luxury');
-      }
-    }
-  }
-
-  // Add search history context (if available)
-  if (userPrefs.search_history && userPrefs.search_history.length > 0) {
-    // Use the most recent searches
-    const recentSearches = userPrefs.search_history.slice(-3);
-    queryParts.push(recentSearches.join(' '));
-  }
-
-  return queryParts.join(' ');
-}
-
-async function getFilteredProducts(userPrefs: UserPreferences) {
-  const filters: any = {};
-
-  // Apply brand filter
-  if (userPrefs.favorite_brands && userPrefs.favorite_brands.length > 0) {
-    // Get products from favorite brands
-    const brandProducts = await Promise.all(
-      userPrefs.favorite_brands.map((brand: string) => 
-        ProductService.getProductsByBrand(brand, 5, 0)
-      )
-    );
-    return brandProducts.flat();
-  }
-
-  // Apply price range filter
-  if (userPrefs.price_range) {
-    const { min, max } = userPrefs.price_range;
-    if (min !== undefined || max !== undefined) {
-      filters.min_price = min;
-      filters.max_price = max;
-    }
-  }
-
-  // Get filtered products
-  const result = await ProductService.searchProducts({
-    ...filters,
-    limit: 10,
-    offset: 0
-  });
-
-  return result.products;
 } 

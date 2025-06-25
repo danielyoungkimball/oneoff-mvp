@@ -8,6 +8,10 @@ import { UserService } from '../services/userService';
 
 interface AuthContextType {
   user: AuthUser | null;
+  signIn: (email: string, password: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
+  signUp: (email: string, password: string) => Promise<void>;
+  updateProfile: (profile: User) => Promise<void>;
   profile: User | null;
   loading: boolean;
   signOut: () => Promise<void>;
@@ -20,7 +24,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [signIn, setSignIn] = useState<() => Promise<void>>(() => Promise.resolve());
+  const [signInWithGoogle, setSignInWithGoogle] = useState<() => Promise<void>>(() => Promise.resolve());
+  const [signUp, setSignUp] = useState<() => Promise<void>>(() => Promise.resolve());
+  const [updateProfile, setUpdateProfile] = useState<() => Promise<void>>(() => Promise.resolve());
 
+  // TODO: Implement these functions
+  console.log(setSignIn, setSignInWithGoogle, setSignUp, setUpdateProfile);
   const fetchProfile = async (userId: string) => {
     try {
       const userProfile = await UserService.getUser(userId);
@@ -79,6 +89,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     user,
     profile,
     loading,
+    signIn,
+    signInWithGoogle,
+    signUp,
+    updateProfile,
     signOut,
     refreshProfile,
   };

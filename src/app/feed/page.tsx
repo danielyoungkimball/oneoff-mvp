@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useAuth } from "../../contexts/AuthContext";
+import Image from "next/image";
 import { Product } from "../../types/product";
 import { FriendRecWithDetails } from "../../types/friendRecs";
 
@@ -12,7 +12,6 @@ interface FeedItem {
 }
 
 export default function FeedPage() {
-  const { user } = useAuth();
   const [feed, setFeed] = useState<FeedItem[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -47,7 +46,7 @@ export default function FeedPage() {
         );
       }
       setFeed(items);
-    } catch (error) {
+    } catch {
       setFeed([]);
     } finally {
       setLoading(false);
@@ -77,7 +76,7 @@ export default function FeedPage() {
             <span className="text-sm">Try updating your preferences or adding products</span>
           </div>
         ) : (
-          feed.map((item, idx) => (
+          feed.map((item) => (
             <div
               key={item.id}
               className="relative snap-center flex flex-col justify-center items-center min-h-screen py-8 px-2"
@@ -86,11 +85,14 @@ export default function FeedPage() {
               <div className="bg-white rounded-2xl shadow-xl w-full max-w-md overflow-hidden flex flex-col items-center">
                 {/* Product Image */}
                 {item.product.img_url ? (
-                  <img
-                    src={item.product.img_url}
-                    alt={item.product.name}
-                    className="w-full h-80 object-cover object-center"
-                  />
+                  <div className="relative w-full h-80">
+                    <Image
+                      src={item.product.img_url}
+                      alt={item.product.name}
+                      fill
+                      className="object-cover object-center"
+                    />
+                  </div>
                 ) : (
                   <div className="w-full h-80 bg-gray-200 flex items-center justify-center text-4xl text-gray-400">
                     🛒

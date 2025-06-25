@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Product } from '../types/product';
 import { UserPreferences } from '../types/db';
+import Image from 'next/image';
 
 interface FeedResponse {
   products: Product[];
@@ -145,10 +146,12 @@ export default function Feed() {
               <div key={product.id} className="bg-white rounded-lg shadow overflow-hidden hover:shadow-lg transition-shadow">
                 {product.img_url && (
                   <div className="aspect-w-16 aspect-h-9 bg-gray-200">
-                    <img
+                    <Image
                       src={product.img_url}
                       alt={product.name}
                       className="w-full h-48 object-cover"
+                      width={640}
+                      height={360}
                       onError={(e) => {
                         const target = e.target as HTMLImageElement;
                         target.style.display = 'none';

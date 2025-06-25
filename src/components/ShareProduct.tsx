@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Image from 'next/image';
 import { Product } from '../types/product';
 import { CreateFriendRecInput } from '../types/friendRecs';
 
@@ -37,8 +38,8 @@ export default function ShareProduct({ product, onClose, onSuccess }: ShareProdu
         const data = await response.json();
         setUsers(data.users);
       }
-    } catch (error) {
-      console.error('Error fetching users:', error);
+    } catch {
+      console.error('Error fetching users');
     }
   };
 
@@ -54,8 +55,8 @@ export default function ShareProduct({ product, onClose, onSuccess }: ShareProdu
         const data = await response.json();
         setUsers(data.users);
       }
-    } catch (error) {
-      console.error('Error searching users:', error);
+    } catch {
+      console.error('Error searching users');
     }
   };
 
@@ -118,7 +119,7 @@ export default function ShareProduct({ product, onClose, onSuccess }: ShareProdu
       setTimeout(() => {
         onClose();
       }, 2000);
-    } catch (error) {
+    } catch {
       setError('Failed to share product. Please try again.');
     } finally {
       setLoading(false);
@@ -204,11 +205,14 @@ export default function ShareProduct({ product, onClose, onSuccess }: ShareProdu
                     />
                     <div className="flex items-center flex-1">
                       {user.avatar_url ? (
-                        <img
-                          src={user.avatar_url}
-                          alt={user.name}
-                          className="w-8 h-8 rounded-full mr-3"
-                        />
+                        <div className="relative w-8 h-8 mr-3">
+                          <Image
+                            src={user.avatar_url}
+                            alt={user.name}
+                            fill
+                            className="rounded-full"
+                          />
+                        </div>
                       ) : (
                         <div className="w-8 h-8 bg-gray-300 rounded-full mr-3 flex items-center justify-center">
                           <span className="text-sm text-gray-600">
