@@ -1,15 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '../../../../../lib/supabase';
 
-export async function GET(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+function getIdFromRequest(request: NextRequest): string | null {
+  const segments = request.nextUrl.pathname.split('/');
+  return segments[segments.length - 1] || null;
+}
+
+export async function GET(request: NextRequest) {
   try {
+    const id = getIdFromRequest(request);
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Missing product id' },
+        { status: 400 }
+      );
+    }
     const { data, error } = await supabase
       .from('products')
       .select('*')
-      .eq('id', params.id)
+      .eq('id', id)
       .single();
 
     if (error) {
@@ -29,17 +38,21 @@ export async function GET(
   }
 }
 
-export async function PUT(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function PUT(request: NextRequest) {
   try {
+    const id = getIdFromRequest(request);
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Missing product id' },
+        { status: 400 }
+      );
+    }
     const body = await request.json();
     
     const { data, error } = await supabase
       .from('products')
       .update(body)
-      .eq('id', params.id)
+      .eq('id', id)
       .select()
       .single();
 
@@ -60,15 +73,19 @@ export async function PUT(
   }
 }
 
-export async function DELETE(
-  request: NextRequest,
-  { params }: { params: { id: string } }
-) {
+export async function DELETE(request: NextRequest) {
   try {
+    const id = getIdFromRequest(request);
+    if (!id) {
+      return NextResponse.json(
+        { error: 'Missing product id' },
+        { status: 400 }
+      );
+    }
     const { error } = await supabase
       .from('products')
       .delete()
-      .eq('id', params.id);
+      .eq('id', id);
 
     if (error) {
       return NextResponse.json(
