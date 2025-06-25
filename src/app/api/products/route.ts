@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ProductService } from '../../../services/productService';
 import { EmbeddingService } from '../../../utils/embeddings';
-import { CreateProductInput, ProductSearchParams } from '../../../types/product';
+import { CreateProductInput, Product, ProductSearchParams } from '../../../types/product';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,12 +10,23 @@ export async function GET(request: NextRequest) {
     // Check if this is a vector search
     const query = searchParams.get('query');
     if (query) {
-      // Generate embedding for the search query
-      const embedding = await EmbeddingService.generateEmbedding(query);
+      let embedding = null;
+      try {
+        embedding = await EmbeddingService.generateEmbedding(query);
+      } catch (e) {
+        console.error('Embedding error:', e);
+        return NextResponse.json({ products: [] });
+      }
       const limit = parseInt(searchParams.get('limit') || '10');
       const threshold = parseFloat(searchParams.get('threshold') || '0.7');
       
-      const products = await ProductService.searchProductsByText(query, embedding, limit, threshold);
+      let products: Product[] = [];
+      try {
+        products = (await ProductService.searchProductsByText(query, embedding, limit, threshold)) || [];
+      } catch (e) {
+        console.error('ProductService.searchProductsByText error:', e);
+        products = [];
+      }
       return NextResponse.json({ products });
     }
 
@@ -29,12 +40,19 @@ export async function GET(request: NextRequest) {
       offset: searchParams.get('offset') ? parseInt(searchParams.get('offset')!) : 0,
     };
 
-    const result = await ProductService.searchProducts(searchParamsObj);
+    let result: { products: Product[] } = { products: [] };
+    try {
+      result = (await ProductService.searchProducts(searchParamsObj)) || { products: [] };
+      if (!result.products) result.products = [];
+    } catch (e) {
+      console.error('ProductService.searchProducts error:', e);
+      result = { products: [] };
+    }
     return NextResponse.json(result);
   } catch (error) {
     console.error('Error fetching products:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch products' },
+      { products: [], error: 'Failed to fetch products' },
       { status: 500 }
     );
   }
@@ -45,16 +63,31 @@ export async function POST(request: NextRequest) {
     const body: CreateProductInput = await request.json();
     
     // Generate embedding for the product
-    const embedding = await EmbeddingService.generateProductEmbedding({
-      name: body.name,
-      brand: body.brand,
-      tags: body.tags,
-    });
+    let embedding: number[] = [];
+    try {
+      embedding = await EmbeddingService.generateProductEmbedding({
+        name: body.name,
+        brand: body.brand,
+        tags: body.tags,
+      });
+    } catch (e) {
+      console.error('Embedding error:', e);
+      embedding = [];
+    }
 
-    const product = await ProductService.createProduct({
-      ...body,
-      embedding,
-    });
+    let product = null;
+    try {
+      product = await ProductService.createProduct({
+        ...body,
+        embedding,
+      });
+    } catch (e) {
+      console.error('ProductService.createProduct error:', e);
+      return NextResponse.json(
+        { error: 'Failed to create product' },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json(product, { status: 201 });
   } catch (error) {

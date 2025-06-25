@@ -4,7 +4,7 @@ import { FriendRecsService } from '../../../../services/friendRecsService';
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: { id: string } },
 ) {
   try {
     // Get current authenticated user

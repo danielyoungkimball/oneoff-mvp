@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '../../../../../lib/supabase';
 import { FriendRecsService } from '../../../../services/friendRecsService';
+import { User } from '@supabase/supabase-js';
 
 export async function GET(request: NextRequest) {
   try {
@@ -9,7 +10,7 @@ export async function GET(request: NextRequest) {
     
     if (!authUser) {
       return NextResponse.json(
-        { error: 'Not authenticated' },
+        { error: 'Not authenticated', users: [] },
         { status: 401 }
       );
     }
@@ -18,18 +19,23 @@ export async function GET(request: NextRequest) {
     const query = searchParams.get('q') || '';
     const limit = parseInt(searchParams.get('limit') || '10');
 
-    let users;
-    if (query.trim()) {
-      users = await FriendRecsService.searchUsersForSharing(authUser.id, query, limit);
-    } else {
-      users = await FriendRecsService.getUsersForSharing(authUser.id, limit);
+    let users: User[] = [];
+    try {
+      if (query.trim()) {
+        users = ((await FriendRecsService.searchUsersForSharing(authUser.id, query, limit)) || []) as unknown as User[];
+      } else {
+        users = ((await FriendRecsService.getUsersForSharing(authUser.id, limit)) || []) as unknown as User[];
+      }
+    } catch (e) {
+      console.error('FriendRecsService user search error:', e);
+      users = [];
     }
 
     return NextResponse.json({ users });
   } catch (error) {
     console.error('Error searching users:', error);
     return NextResponse.json(
-      { error: 'Failed to search users' },
+      { users: [], error: 'Failed to search users' },
       { status: 500 }
     );
   }

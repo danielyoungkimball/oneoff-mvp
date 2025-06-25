@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabase } from '../../../../lib/supabase';
 import { FriendRecsService } from '../../../services/friendRecsService';
-import { CreateFriendRecInput } from '../../../types/friendRecs';
+import { CreateFriendRecInput, FriendRecsResponse } from '../../../types/friendRecs';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function GET(request: NextRequest) {
     
     if (!authUser) {
       return NextResponse.json(
-        { error: 'Not authenticated' },
+        { error: 'Not authenticated', recommendations: [] },
         { status: 401 }
       );
     }
@@ -20,18 +20,25 @@ export async function GET(request: NextRequest) {
     const limit = parseInt(searchParams.get('limit') || '20');
     const offset = parseInt(searchParams.get('offset') || '0');
 
-    let result;
-    if (type === 'sent') {
-      result = await FriendRecsService.getSentRecommendations(authUser.id, limit, offset);
-    } else {
-      result = await FriendRecsService.getReceivedRecommendations(authUser.id, limit, offset);
+    let result: FriendRecsResponse[] = [];
+    try {
+      if (type === 'sent') {
+        const sentRecs = await FriendRecsService.getSentRecommendations(authUser.id, limit, offset);
+        result = Array.isArray(sentRecs) ? sentRecs : [];
+      } else {
+        const receivedRecs = await FriendRecsService.getReceivedRecommendations(authUser.id, limit, offset);
+        result = Array.isArray(receivedRecs) ? receivedRecs : [];
+      }
+    } catch (e) {
+      console.error('FriendRecsService error:', e);
+      result = [];
     }
 
-    return NextResponse.json(result);
+    return NextResponse.json({ recommendations: result });
   } catch (error) {
     console.error('Error fetching friend recommendations:', error);
     return NextResponse.json(
-      { error: 'Failed to fetch recommendations' },
+      { recommendations: [], error: 'Failed to fetch recommendations' },
       { status: 500 }
     );
   }
@@ -49,7 +56,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const body: CreateFriendRecInput = await request.json();
+    let body: CreateFriendRecInput;
+    try {
+      body = await request.json();
+    } catch (e) {
+      console.error('Error parsing JSON body:', e);
+      return NextResponse.json(
+        { error: 'Invalid JSON body' },
+        { status: 400 }
+      );
+    }
     
     // Validate required fields
     if (!body.receiver_id || !body.product_id) {
@@ -60,7 +76,16 @@ export async function POST(request: NextRequest) {
     }
 
     // Create the friend recommendation
-    const recommendation = await FriendRecsService.createFriendRec(authUser.id, body);
+    let recommendation = null;
+    try {
+      recommendation = await FriendRecsService.createFriendRec(authUser.id, body);
+    } catch (e) {
+      console.error('Error creating friend recommendation:', e);
+      return NextResponse.json(
+        { error: 'Failed to create recommendation' },
+        { status: 500 }
+      );
+    }
     
     return NextResponse.json(recommendation, { status: 201 });
   } catch (error) {

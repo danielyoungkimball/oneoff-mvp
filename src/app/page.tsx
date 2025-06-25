@@ -21,9 +21,9 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center bg-white">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mx-auto"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Loading...</p>
         </div>
       </div>
@@ -35,77 +35,52 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      <nav className="bg-white shadow-sm border-b">
-        <div className="max-w-6xl mx-auto px-6 py-4 flex justify-between items-center">
-          <h1 className="text-xl font-semibold">OneOff MVP</h1>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">
+    <div className="min-h-screen bg-white">
+      {/* Header */}
+      <header className="border-b border-[var(--border)] pb-2 mb-6">
+        <div className="max-w-4xl mx-auto flex flex-col items-center pt-8">
+          <h1 className="text-4xl font-bold tracking-tight mb-2">OneOff</h1>
+          <div className="flex items-center gap-4 mt-2 self-end w-full justify-end pr-2">
+            <span className="text-base text-gray-600">
               Welcome, {profile?.name || user.email}
             </span>
             <button
               onClick={signOut}
-              className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              className="px-4 py-2 border border-red-400 text-red-600 rounded-lg font-semibold hover:bg-red-50 transition"
             >
               Sign Out
             </button>
           </div>
         </div>
-      </nav>
+      </header>
 
       {/* Tab Navigation */}
-      <div className="max-w-6xl mx-auto px-6 py-4">
-        <div className="flex space-x-1 bg-white rounded-lg p-1 shadow-sm">
-          <button
-            onClick={() => setActiveTab('feed')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'feed'
-                ? 'bg-indigo-600 text-white'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Feed
-          </button>
-          <button
-            onClick={() => setActiveTab('products')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'products'
-                ? 'bg-indigo-600 text-white'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Products
-          </button>
-          <button
-            onClick={() => setActiveTab('recommendations')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'recommendations'
-                ? 'bg-indigo-600 text-white'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Recommendations
-          </button>
-          <button
-            onClick={() => setActiveTab('profile')}
-            className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
-              activeTab === 'profile'
-                ? 'bg-indigo-600 text-white'
-                : 'text-gray-600 hover:text-gray-900'
-            }`}
-          >
-            Profile
-          </button>
+      <nav className="max-w-4xl mx-auto flex justify-center mb-8">
+        <div className="flex gap-8">
+          {['feed', 'products', 'recommendations', 'profile'].map((tab) => (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab as 'feed' | 'products' | 'recommendations' | 'profile')}
+              className={`pb-2 text-lg font-medium border-b-2 transition-colors ${
+                activeTab === tab
+                  ? 'border-[var(--accent)] text-black'
+                  : 'border-transparent text-gray-500 hover:text-black'
+              }`}
+              style={{ minWidth: 100 }}
+            >
+              {tab.charAt(0).toUpperCase() + tab.slice(1)}
+            </button>
+          ))}
         </div>
-      </div>
+      </nav>
 
       {/* Tab Content */}
-      <div className="max-w-6xl mx-auto">
+      <main className="max-w-4xl mx-auto px-2">
         {activeTab === 'feed' && <Feed />}
         {activeTab === 'products' && <ProductManager />}
         {activeTab === 'recommendations' && <FriendRecommendations />}
         {activeTab === 'profile' && <UserProfile />}
-      </div>
+      </main>
     </div>
   );
 }
